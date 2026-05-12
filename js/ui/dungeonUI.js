@@ -27,8 +27,12 @@ import * as THREE from 'three';
 import { Party, DB, showScreen } from '../gameState.js';
 import { startBattle } from '../battle.js';
 
-const CELL  = 1;      // 1セル = 1単位
-const WALL_H = 1.0;
+// ── 定数 ────────────────────────────────────────────────────────
+const CELL   = 1;      // 1 マス = Three.js 上の 1 単位
+const WALL_H = 1.0;    // 壁の高さ（= 天井の高さ）
+
+// 4 方向の移動ベクトルと名前
+// DIRS[0] = 北（Z-）、DIRS[1] = 東（X+）、DIRS[2] = 南（Z+）、DIRS[3] = 西（X-）
 const DIRS = [
   { dx: 0,  dz: -1, name: '北' },
   { dx: 1,  dz:  0, name: '東' },
@@ -36,41 +40,58 @@ const DIRS = [
   { dx: -1, dz:  0, name: '西' },
 ];
 
-let renderer, scene, camera, clock;
-let _map = [];
-let _rows, _cols;
-let _active = false;
-let _moving = false;   // アニメーション中は入力を受け付けない
-let _animTarget = null;
-let _animProgress = 0;
-let _animFrom = null;
-let _animTo = null;
-let _animType = null;  // 'move' | 'turn'
-let _animFromYaw = 0;
-let _animToYaw = 0;
-let _yaw = 0;
-let _animId;
-// 照明レベル (0=暗闇, 100=完全明るさ)
+// ── モジュール変数（グローバルに近い状態管理） ──────────────────
+let renderer, scene, camera, clock; // Three.js の基本オブジェクト
+let _map  = [];     // 2D 配列：_map[z][x] = '0'/'1'/'S'/'E' など
+let _rows, _cols;   // マップの行数・列数
+let _active = false;   // 画面が表示中かどうか
+let _moving = false;   // アニメーション中は true → 入力を無視
+let _animTarget = null; // （予約変数・現在未使用）
+let _animProgress = 0;  // 0→1 に増加。1になったらアニメーション完了
+let _animFrom = null;   // 移動開始時のマス座標 { x, z }
+let _animTo   = null;   // 移動目標のマス座標 { x, z }
+let _animType = null;   // 'move'（移動）| 'turn'（旋回）
+let _animFromYaw = 0;   // 旋回開始時の Y 軸角度（ラジアン）
+let _animToYaw   = 0;   // 旋回目標の Y 軸角度（ラジアン）
+let _yaw = 0;           // カメラの現在 Y 軸角度（向き）
+let _animId;            // requestAnimationFrame の返り値（cancelに使う）
+
+// 照明レベル（0=暗闇 ～ 100=明るい。50以上だと霧の終わり距離が広がる）
 let _lightLevel = 50;
 
-const TURN_SPEED = 8;  // ラジアン/秒
-const MOVE_SPEED = 6;  // セル/秒
+// アニメーション速度
+const TURN_SPEED = 8;  // ラジアン/秒（旋回スピード）
+const MOVE_SPEED = 6;  // セル/秒（移動スピード）
 
+// ============================================================
+// 初期化（main.js から一度だけ呼ばれる）
+// ============================================================
+
+/**
+ * ダンジョン UI を初期化する。
+ * キーボードイベント・仮想ボタンのリスナーを登録し、
+ * show/hide を持つオブジェクトを返す。
+ */
 export function initDungeonUI() {
   const el = document.getElementById('screen-dungeon');
 
+  // ── キーボード入力 ────────────────────────────────────────
+  // window 全体でキー入力を監視する。
+  // _active（ダンジョン表示中）かつ _moving（アニメーション中でない）ときのみ反応する。
   window.addEventListener('keydown', e => {
     if (!_active || _moving) return;
     switch (e.code) {
-      case 'ArrowUp':   case 'KeyW': tryMove(0);   break;
-      case 'ArrowDown': case 'KeyS': tryMove(2);   break;  // 後退
-      case 'ArrowLeft': case 'KeyA': startTurn(-1); break;
-      case 'ArrowRight':case 'KeyD': startTurn(1);  break;
-      case 'Escape': leaveD(); break;
+      case 'ArrowUp':   case 'KeyW': tryMove(0);    break; // 前進
+      case 'ArrowDown': case 'KeyS': tryMove(2);    break; // 後退（南方向 = 180°反転）
+      case 'ArrowLeft': case 'KeyA': startTurn(-1); break; // 左旋回（-1 = 反時計）
+      case 'ArrowRight':case 'KeyD': startTurn(1);  break; // 右旋回（+1 = 時計）
+      case 'Escape':                 leaveD();       break; // 町へ戻る
     }
   });
 
-  // 仮想ボタン (スマホ対応)
+  // ── 仮想ボタン（スマートフォン対応） ────────────────────────
+  // HTML 上の #btn-d-* ボタンにタップイベントを登録する。
+  // ?. は「要素が存在しない場合は何もしない」という Optional Chaining 記法。
   document.getElementById('btn-d-forward')?.addEventListener('click', () => { if(!_moving) tryMove(0); });
   document.getElementById('btn-d-back')?.addEventListener('click',    () => { if(!_moving) tryMove(2); });
   document.getElementById('btn-d-left')?.addEventListener('click',    () => { if(!_moving) startTurn(-1); });
@@ -81,44 +102,58 @@ export function initDungeonUI() {
     show() {
       _active = true;
       el.style.display = 'flex';
-      startDungeon();
+      startDungeon(); // Three.js シーン構築＆アニメーション開始
     },
     hide() {
       _active = false;
       el.style.display = 'none';
-      stopDungeon();
+      stopDungeon(); // Three.js リソースを解放
     },
   };
 }
 
-// ========== 起動・停止 ==========
-function startDungeon() {
-  const floor = Party.floor;
-  _map = DB.maps[floor];
-  if (!_map) { console.error('No map for floor', floor); return; }
-  _rows = _map.length;
-  _cols = _map[0].length;
+// ============================================================
+// ダンジョン起動・停止
+// ============================================================
 
-  // スタート位置を検索
+/**
+ * ダンジョンを開始する。
+ * Party.floor に対応したマップを DB から取得し、Three.js シーンを構築する。
+ */
+function startDungeon() {
+  const floor = Party.floor; // 現在の階数（1〜）
+  _map = DB.maps[floor];     // dataLoader.js が解析した 2D マップ配列
+  if (!_map) { console.error('No map for floor', floor); return; }
+  _rows = _map.length;       // 行数（Z 方向）
+  _cols = _map[0].length;    // 列数（X 方向）
+
+  // マップからスタート位置 'S' を探してプレイヤーを配置
   for (let r = 0; r < _rows; r++) {
     for (let c = 0; c < _cols; c++) {
-      if (_map[r][c] === 'S') { Party.pos = { x: c, z: r }; Party.dir = 0; }
+      if (_map[r][c] === 'S') {
+        Party.pos = { x: c, z: r }; // スタート座標
+        Party.dir = 0;               // 北を向く（dir=0 = 北）
+      }
     }
   }
 
-  _yaw = dirToYaw(Party.dir);
-  setupRenderer();
-  buildScene();
-  clock = new THREE.Clock();
-  animLoop();
-  updateHUD();
-  drawMinimap();
+  _yaw = dirToYaw(Party.dir); // dir（0〜3）を Y 軸角度（ラジアン）に変換
+  setupRenderer();             // WebGLRenderer を生成
+  buildScene();                // カメラ・ライト・マップジオメトリを生成
+  clock = new THREE.Clock();   // デルタタイム計測用クロック
+  animLoop();                  // アニメーションループ開始
+  updateHUD();                 // キャラクター情報・フロア表示を更新
+  drawMinimap();               // ミニマップを描画
   setMsg(`B${floor}F に潜入した。出口の階段を探せ！`);
 }
 
+/**
+ * ダンジョンを停止する。
+ * アニメーションループをキャンセルし、WebGLRenderer を解放する。
+ */
 function stopDungeon() {
-  cancelAnimationFrame(_animId);
-  renderer?.dispose();
+  cancelAnimationFrame(_animId); // ループを止める
+  renderer?.dispose();           // GPU リソース（VBO, シェーダー等）を解放
   renderer = null;
 }
 
