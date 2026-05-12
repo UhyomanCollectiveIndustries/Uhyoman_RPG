@@ -1,0 +1,17 @@
+# Wizardry-style Spell Data
+# Format: id|name_jp|school|level|target|power|mp_cost|jobs|description
+# school: mage=魔法使い系, priest=僧侶系
+# target: one=単体, all=全体, ally=味方単体, ally_all=味方全体, self=自分
+halito|ハリト|mage|1|all|1d8|2|mage,bishop|炎の矢を放つ。全体に火属性ダメージ。
+katino|カティノ|mage|1|all|sleep|3|mage,bishop|眠りの霧。全体に睡眠効果。
+dumapic|デュマピック|mage|1|self|locate|1|mage,bishop|現在位置を把握する。
+mogref|モグレフ|mage|2|self|ac:-2|4|mage,bishop|魔法の防壁。ACを2改善。
+sopic|ソピック|mage|2|self|invisible|4|mage,bishop|透明化。モンスターに遭遇しにくくなる。
+mahalito|マハリト|mage|3|all|3d8|6|mage,bishop|強力な炎の爆発。全体に大ダメージ。
+milwa|ミルワ|priest|1|ally_all|light|2|priest,bishop,lord|パーティを照らす光の祈り。
+porfic|ポーフィク|priest|1|self|ac:-2|3|priest,bishop,lord|神の加護でACを改善。
+matu|マツ|priest|1|ally_all|fear_away|3|priest,bishop,lord|恐怖を払い逃走率を上げる。
+dios|ディオス|priest|2|ally|hp:2d6+2|4|priest,bishop,lord|傷を癒す回復呪文。
+badios|バディオス|priest|2|one|damage:2d6|4|priest,bishop,lord|神聖なる力で単体攻撃。
+lomilwa|ロミルワ|priest|3|ally_all|light_long|5|priest,bishop,lord|長時間照らす上位光呪文。
+dialko|ディアルコ|priest|3|ally|poison_cure|3|priest,bishop,lord|毒・麻痺を治療する。

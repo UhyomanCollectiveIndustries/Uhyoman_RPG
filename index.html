@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>THREDRY</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css" />
+</head>
+<body>
+
+<!-- ========== TITLE ========== -->
+<div id="screen-title" class="screen">
+  <div id="title-particles"></div>
+  <div class="title-content">
+    <div class="title-logo">THREDRY</div>
+    <div class="title-sub">― 深淵への旅 ―</div>
+    <button id="btn-new-game" class="btn-primary">冒険を始める</button>
+  </div>
+</div>
+
+<!-- ========== TOWN HUB ========== -->
+<div id="screen-town" class="screen">
+
+  <!-- Three.js 3D Background Canvas -->
+  <canvas id="town-bg-canvas"></canvas>
+  <!-- Readability overlays -->
+  <div class="town-ov-left"></div>
+  <div class="town-ov-bottom"></div>
+
+  <!-- Top-left: location info panel -->
+  <div class="town-info-panel">
+    <div class="town-info-title" id="town-info-title">THREDRY の街</div>
+    <div class="town-info-sub"   id="town-info-sub">― 街の広場 ―</div>
+    <div class="town-info-desc"  id="town-info-desc">ここはThredryの街の中心広場です。各施設に立ち寄り、旅の準備を整えましょう。どこへ向かいますか？</div>
+  </div>
+
+  <!-- Top-right: gold counter -->
+  <div class="town-gold-badge">
+    <span id="town-gold-amount">0</span><span class="town-gold-g">G</span><i class="ph-bold ph-coins town-gold-coin"></i>
+  </div>
+
+  <!-- Bottom: navigation band + party -->
+  <div class="town-bottom">
+    <div class="town-nav-band">
+      <button class="town-nav-btn" id="btn-town-tavern"  data-loc="tavern">
+        <i class="ph-bold ph-beer-bottle"></i>
+        <span class="nav-label">酒場</span>
+      </button>
+      <button class="town-nav-btn" id="btn-town-temple"  data-loc="temple">
+        <i class="ph-bold ph-cross"></i>
+        <span class="nav-label">寺院</span>
+      </button>
+      <button class="town-nav-btn" id="btn-town-castle"  data-loc="castle">
+        <i class="ph-bold ph-castle-turret"></i>
+        <span class="nav-label">お城</span>
+      </button>
+      <button class="town-nav-btn" id="btn-town-outside" data-loc="outside">
+        <i class="ph-bold ph-sword"></i>
+        <span class="nav-label">外へ</span>
+      </button>
+      <button class="town-nav-btn" id="btn-town-shop"    data-loc="shop">
+        <i class="ph-bold ph-storefront"></i>
+        <span class="nav-label">商店</span>
+      </button>
+    </div>
+    <div class="town-nav-hint" id="town-nav-hint">場所を選んでください</div>
+    <div class="town-party-bar" id="town-party-bar"></div>
+  </div>
+
+</div>
+
+<!-- ========== TAVERN (酒場) ========== -->
+<div id="screen-tavern" class="screen">
+  <div class="loc-layout">
+    <div class="loc-header">
+      <div class="loc-title">🍺 酒場</div>
+      <button class="btn-back" id="btn-tavern-back">← 街へ戻る</button>
+    </div>
+    <div class="tavern-body">
+      <div class="tavern-left">
+        <div class="panel-title">パーティ編成 <span id="tavern-party-count"></span></div>
+        <div id="tavern-party-list" class="party-list"></div>
+        <div class="camp-btns">
+          <button id="btn-tavern-add-party"    class="btn-secondary">＋ パーティに加える</button>
+          <button id="btn-tavern-remove-party" class="btn-secondary">－ 外す</button>
+        </div>
+      </div>
+      <div class="tavern-right">
+        <div class="panel-title">登録済み冒険者 <span id="tavern-roster-count"></span></div>
+        <div id="tavern-roster-list" class="party-list"></div>
+        <div class="camp-btns">
+          <button id="btn-tavern-new-char" class="btn-primary">新規登録</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== TEMPLE (寺院) ========== -->
+<div id="screen-temple" class="screen">
+  <div class="loc-layout">
+    <div class="loc-header">
+      <div class="loc-title">⛪ 寺院</div>
+      <button class="btn-back" id="btn-temple-back">← 街へ戻る</button>
+    </div>
+    <div class="temple-body">
+      <div class="temple-npc">
+        <div class="npc-text" id="temple-msg">「神の御加護によって、死者を蘇らせることができます。」</div>
+      </div>
+      <div class="panel-title">要治療の冒険者</div>
+      <div id="temple-roster" class="party-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== CASTLE (お城) ========== -->
+<div id="screen-castle" class="screen">
+  <div class="loc-layout">
+    <div class="loc-header">
+      <div class="loc-title">🏰 お城</div>
+      <button class="btn-back" id="btn-castle-back">← 街へ戻る</button>
+    </div>
+    <div class="castle-body">
+      <div class="castle-npc">
+        <div class="castle-king-name">国王 アルベルト</div>
+        <div class="castle-dialogue" id="castle-dialogue"></div>
+      </div>
+      <div class="castle-lore">
+        <div class="panel-title">目的</div>
+        <div id="castle-objective" class="castle-text"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== OUTSIDE (外に出る) ========== -->
+<div id="screen-outside" class="screen">
+  <div class="loc-layout outside-center">
+    <div class="loc-header">
+      <div class="loc-title">🌲 街の外</div>
+      <button class="btn-back" id="btn-outside-back">← 街へ戻る</button>
+    </div>
+    <div class="outside-choices">
+      <button class="outside-choice-btn" id="btn-outside-dungeon">
+        <div class="outside-icon"><i class="ph-bold ph-skull"></i></div>
+        <div class="outside-label">ダンジョンへ</div>
+        <div class="outside-desc">魔王が潜む深洞へ踏み込む</div>
+      </button>
+      <button class="outside-choice-btn" id="btn-outside-training">
+        <div class="outside-icon"><i class="ph-bold ph-shield-star"></i></div>
+        <div class="outside-label">訓練場</div>
+        <div class="outside-desc">キャラクターを作成する</div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SHOP (商店) ========== -->
+<div id="screen-shop" class="screen">
+  <div class="loc-layout">
+    <div class="loc-header">
+      <div class="loc-title">🏪 商店</div>
+      <div class="shop-gold">所持金: <span id="shop-gold">0</span>G</div>
+      <button class="btn-back" id="btn-shop-back">← 街へ戻る</button>
+    </div>
+    <div class="shop-tabs">
+      <button class="shop-tab active" data-tab="buy">購入</button>
+      <button class="shop-tab" data-tab="sell">売却</button>
+      <button class="shop-tab" data-tab="identify">鑑定</button>
+    </div>
+    <div class="shop-body">
+      <div id="shop-item-list"  class="shop-list"></div>
+      <div id="shop-item-detail" class="shop-detail">
+        <div id="shop-detail-text" class="shop-detail-text">アイテムを選んでください</div>
+        <div class="shop-detail-btns" id="shop-action-btns"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- キャラ作成モーダル（共通） -->
+<div id="char-create-modal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="panel-title">冒険者の登録</div>
+    <form id="char-create-form">
+      <label class="form-label">名前
+        <input id="cc-name" type="text" maxlength="10" placeholder="名前を入力…" autocomplete="off" />
+      </label>
+      <label class="form-label">職業
+        <select id="cc-job"></select>
+      </label>
+      <table id="cc-stats" class="stat-table"></table>
+      <div class="modal-btns">
+        <button type="submit"  class="btn-primary">登録</button>
+        <button type="button" id="btn-cc-cancel" class="btn-secondary">キャンセル</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========== DUNGEON ========== -->
+<div id="screen-dungeon" class="screen">
+  <canvas id="dungeon-canvas"></canvas>
+
+  <div id="d-hud">
+    <div id="d-hud-name" class="d-hud-name"></div>
+    <div id="d-floor-label" class="d-floor"></div>
+    <div id="d-party-strip" class="d-party-strip"></div>
+  </div>
+
+  <div id="d-minimap">
+    <canvas id="minimap-canvas" width="150" height="150"></canvas>
+    <div class="minimap-label">MAP</div>
+  </div>
+
+  <div id="d-msg" class="d-msg"></div>
+
+  <div id="d-controls">
+    <div class="d-ctrl-row">
+      <button id="btn-d-forward" class="d-btn">↑</button>
+    </div>
+    <div class="d-ctrl-row">
+      <button id="btn-d-left"  class="d-btn">←</button>
+      <button id="btn-d-back"  class="d-btn">↓</button>
+      <button id="btn-d-right" class="d-btn">→</button>
+    </div>
+    <div class="d-ctrl-row">
+      <button id="btn-d-exit"  class="d-btn small">街へ</button>
+    </div>
+  </div>
+
+  <div class="key-hint">WASD/矢印:移動&amp;旋回 | Esc:街へ</div>
+</div>
+
+<!-- ========== BATTLE ========== -->
+<div id="screen-battle" class="screen">
+  <div class="battle-layout">
+    <div id="b-enemy-zone" class="b-enemy-zone"></div>
+    <div id="b-log"        class="b-log"></div>
+    <div id="b-party-strip" class="b-party-strip"></div>
+    <div id="b-command-panel" class="b-command-panel">
+      <div id="b-cmd-title" class="b-cmd-title"></div>
+      <div id="b-cmd-btns"  class="b-cmd-btns"></div>
+    </div>
+    <div id="b-result-panel" class="b-result-panel" style="display:none">
+      <div id="b-result-msg" class="b-result-msg"></div>
+      <button id="btn-b-continue" class="btn-primary">続ける</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
+
+
+<!-- ========== TITLE ========== -->
+<div id="screen-title" class="screen">
+  <div id="title-particles"></div>
+  <div class="title-content">
+    <div class="title-logo">THREDRY</div>
+    <div class="title-sub">― 深淵への旅 ―</div>
+    <button id="btn-new-game" class="btn-primary">冒険を始める</button>
+  </div>
+</div>
+
+<!-- ========== CAMP (パーティ編成・準備) ========== -->
+<div id="screen-camp" class="screen">
+  <div class="camp-layout">
+    <div class="camp-left">
+      <div class="panel-title">パーティ <span id="camp-gold"></span></div>
+      <div id="party-list" class="party-list"></div>
+      <div class="camp-btns">
+        <button id="btn-camp-add"    class="btn-secondary">＋ 仲間を加える</button>
+        <button id="btn-camp-remove" class="btn-secondary">－ 外す</button>
+      </div>
+    </div>
+    <div class="camp-right">
+      <div class="panel-title">拠点メニュー</div>
+      <button id="btn-camp-dungeon" class="btn-primary w100">ダンジョンへ</button>
+      <div class="camp-info">
+        <p>・最大6人でパーティを編成</p>
+        <p>・前衛3人/後衛3人が基本</p>
+        <p>・戦士・侍・君主は前衛向き</p>
+        <p>・魔法使い・僧侶は後衛向き</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- キャラ作成モーダル -->
+<div id="char-create-modal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="panel-title">冒険者の登録</div>
+    <form id="char-create-form">
+      <label class="form-label">名前
+        <input id="cc-name" type="text" maxlength="10" placeholder="名前を入力…" autocomplete="off" />
+      </label>
+      <label class="form-label">職業
+        <select id="cc-job"></select>
+      </label>
+      <table id="cc-stats" class="stat-table"></table>
+      <div class="modal-btns">
+        <button type="submit"  class="btn-primary">登録</button>
+        <button type="button" id="btn-cc-cancel" class="btn-secondary">キャンセル</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========== DUNGEON ========== -->
+<div id="screen-dungeon" class="screen">
+  <canvas id="dungeon-canvas"></canvas>
+
+  <div id="d-hud">
+    <div id="d-hud-name" class="d-hud-name"></div>
+    <div id="d-floor-label" class="d-floor"></div>
+    <div id="d-party-strip" class="d-party-strip"></div>
+  </div>
+
+  <div id="d-minimap">
+    <canvas id="minimap-canvas" width="150" height="150"></canvas>
+    <div class="minimap-label">MAP</div>
+  </div>
+
+  <div id="d-msg" class="d-msg"></div>
+
+  <div id="d-controls">
+    <div class="d-ctrl-row">
+      <button id="btn-d-forward" class="d-btn">↑</button>
+    </div>
+    <div class="d-ctrl-row">
+      <button id="btn-d-left"  class="d-btn">←</button>
+      <button id="btn-d-back"  class="d-btn">↓</button>
+      <button id="btn-d-right" class="d-btn">→</button>
+    </div>
+    <div class="d-ctrl-row">
+      <button id="btn-d-exit"  class="d-btn small">拠点へ</button>
+    </div>
+  </div>
+
+  <div class="key-hint">WASD/矢印:移動&amp;旋回 | Esc:拠点</div>
+</div>
+
+<!-- ========== BATTLE ========== -->
+<div id="screen-battle" class="screen">
+  <div class="battle-layout">
+    <div id="b-enemy-zone" class="b-enemy-zone"></div>
+    <div id="b-log"        class="b-log"></div>
+    <div id="b-party-strip" class="b-party-strip"></div>
+    <div id="b-command-panel" class="b-command-panel">
+      <div id="b-cmd-title" class="b-cmd-title"></div>
+      <div id="b-cmd-btns"  class="b-cmd-btns"></div>
+    </div>
+    <div id="b-result-panel" class="b-result-panel" style="display:none">
+      <div id="b-result-msg" class="b-result-msg"></div>
+      <button id="btn-b-continue" class="btn-primary">続ける</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

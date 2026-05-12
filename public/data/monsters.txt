@@ -1,0 +1,13 @@
+# Wizardry-style Monster Data
+# Format: id|name_jp|hp_dice|ac|attacks|damage|exp|gold|level|resist|special|description
+# attacks: 攻撃回数  damage: ダイス表記  resist: fire,cold,magic,all
+kobold|コボルド|1d4|7|1|1d4|10|5|1|none|none|小柄なトカゲ人間。弱いが数が多い。
+giant_rat|ジャイアントラット|1d6|7|1|1d3|12|3|1|none|poison|大型の凶暴なネズミ。噛みつきが毒。
+slime|スライム|1d8|8|1|1d6|20|0|1|cold|none|酸性の粘液体。物理攻撃に強い。
+orc|オーク|2d6|6|1|1d8|40|15|2|none|none|豚面の戦士。集団で行動する。
+zombie|ゾンビ|2d8|8|1|1d6|35|0|2|none|disease|腐臭漂うアンデッド。毒と麻痺に免疫。
+skeleton|スケルトン|3d6|7|2|1d6|60|5|3|cold|none|動く骸骨。攻撃回数が多い。
+werewolf|ウェアウルフ|4d8|5|2|1d8|120|30|4|magic|none|満月に変身する呪われた者。
+vampire|ヴァンパイア|8d8|2|2|1d10|500|100|6|fire|level_drain|貴族の吸血鬼。レベルを吸収する。
+dragon|ドラゴン|10d10|0|3|1d12|2000|500|8|fire,cold|breath|古代の竜。全てに強大な力を持つ。
+werdna|ウェルドナ|15d10|-4|5|2d10|10000|9999|13|all|level_drain|闇の魔導師。最深部に潜む。

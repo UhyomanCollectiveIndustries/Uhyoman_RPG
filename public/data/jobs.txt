@@ -1,0 +1,10 @@
+# Wizardry-style Job Data
+# Format: id|name_jp|hp_die|mp_die|str|int|pie|vit|agi|luk|hit_bonus|armor_class|can_equip|description
+warrior|戦士|10|0|15|8|8|14|10|9|+2|5|sword,axe,mace,shield,heavy_armor|屈強な肉体を誇る前衛の要。
+mage|魔法使い|4|8|8|15|10|8|12|11|+0|9|dagger,staff,robe|魔法の探求に全てを捧げた術師。
+priest|僧侶|6|6|10|10|15|12|10|12|+1|6|mace,staff,shield,robe,light_armor|神の加護を受け仲間を癒す者。
+thief|盗賊|6|2|11|10|9|10|15|13|+1|7|dagger,sword,light_armor|闇に潜み罠を解除し先手を取る。
+bishop|司教|4|7|8|13|14|9|11|12|+0|8|dagger,staff,robe|魔法と神聖呪文を両方扱う。
+samurai|侍|10|3|15|12|10|14|12|11|+3|4|sword,katana,heavy_armor|東方の剣士。高い命中と会心。
+lord|君主|9|4|13|10|14|13|11|12|+2|4|sword,mace,shield,heavy_armor|戦士と僧侶の資質を併せ持つ。
+ninja|忍者|8|2|13|13|11|12|16|14|+4|3|dagger,katana,light_armor|最速の暗殺者。素手でも強力。

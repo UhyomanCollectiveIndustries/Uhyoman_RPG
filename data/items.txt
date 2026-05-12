@@ -1,0 +1,12 @@
+# Wizardry-style Item Data
+# Format: id|name_jp|type|effect|value|description
+potion_hp_s|ポーションS|heal|hp:30|50|HPを30回復する小瓶。
+potion_hp_m|ポーションM|heal|hp:80|150|HPを80回復する中瓶。
+potion_hp_l|ポーションL|heal|hp:200|400|HPを200回復する大瓶。
+antidote|アンチドート|cure|poison|80|毒を治療する解毒薬。
+elixir|エリクサー|revive|hp_full|2000|死亡者を全快で蘇生する。
+holy_water|聖水|cure|curse|300|呪いを解く聖なる水。
+torch|たいまつ|tool|light:100|30|暗闇を照らす松明。100歩持続。
+rope|ロープ|tool|escape|200|ダンジョンから脱出するための縄。
+identify_scroll|鑑定の書|identify|item|100|未鑑定アイテムを鑑定する。
+map_scroll|地図の書|map|floor|500|現在の階層の地図を完成させる。

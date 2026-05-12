@@ -1,0 +1,10 @@
+# Wizardry-style Armor Data
+# Format: id|name_jp|type|ac_bonus|value|equip_jobs|description
+leather_armor|レザーアーマー|light_armor|2|80|warrior,thief,priest,samurai,lord,ninja|柔らかい皮鎧。動きやすい。
+chain_mail|チェインメイル|heavy_armor|4|400|warrior,samurai,lord|鎖帷子。重さと防御のバランス。
+plate_mail|プレートメイル|heavy_armor|6|2000|warrior,lord|鋼鉄の全身鎧。最高の防御力。
+robe|ローブ|robe|1|40|mage,priest,bishop|魔法使いが好む軽い法衣。
+small_shield|スモールシールド|shield|1|60|warrior,priest,samurai,lord|小型の丸盾。片手に構える。
+large_shield|ラージシールド|shield|2|300|warrior,lord|大型の盾。高い防御力。
+helmet|ヘルメット|helm|1|150|warrior,samurai,lord|頭を守る鉄兜。
+ninja_suit|忍者装束|light_armor|3|500|ninja|動きを妨げない特製の装束。

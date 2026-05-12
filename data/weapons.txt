@@ -1,0 +1,12 @@
+# Wizardry-style Weapon Data
+# Format: id|name_jp|type|damage_dice|damage_bonus|hit_bonus|value|equip_jobs|description
+short_sword|ショートソード|sword|1d6|0|0|50|warrior,thief,samurai,lord,ninja|最も一般的な短剣。
+long_sword|ロングソード|sword|1d8|0|+1|200|warrior,samurai,lord|バランスの良い片手剣。
+broad_sword|ブロードソード|sword|2d4|+1|0|350|warrior,samurai,lord|幅広の剣。重いが威力は高い。
+katana|カタナ|katana|1d10|0|+2|800|samurai,ninja|東方より伝わりし名刀。
+dagger|ダガー|dagger|1d4|0|+1|20|mage,priest,thief,bishop,ninja|素早く扱える短刀。
+battle_axe|バトルアックス|axe|1d8|+2|0|300|warrior,lord|重い戦斧。鎧を貫く力を持つ。
+war_hammer|ウォーハンマー|mace|1d6|+1|0|250|warrior,priest,lord|聖なる力を宿すと言われる槌。
+staff|スタッフ|staff|1d6|0|0|30|mage,priest,bishop|法杖。魔法の詠唱を助ける。
+mace|メイス|mace|1d6|+1|0|150|priest,warrior,lord|棘付き鉄球の付いた棒。
+ninja_to|忍者刀|katana|1d6|+1|+3|600|ninja|忍者専用の湾曲した短刀。

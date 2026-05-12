@@ -1,0 +1,16 @@
+#vite
+dist/
+node_modules/
+*.log
+*.lock
+*.env
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.sln
+*.suo
+*.tmp
+
+# Thredry
+assets/Reference_image/*
