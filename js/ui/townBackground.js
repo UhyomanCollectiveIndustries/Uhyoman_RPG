@@ -62,8 +62,8 @@ export function initTownBackground() {
 
   // ── Camera ───────────────────────────────────────────────
   camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 500);
-  camera.position.set(0, 16, 55);
-  camera.lookAt(0, 4, -40);
+  camera.position.set(0, 10, 55);
+  camera.lookAt(0, 5, -40);
 
   // ── Lighting ─────────────────────────────────────────────
   scene.add(new THREE.AmbientLight(0x5060a0, 5.0));
@@ -313,8 +313,8 @@ function animate() {
 
   // カメラ超低速ドリフト（遠近感のある揺れ）
   camera.position.x = Math.sin(t * 0.025) * 3.0;
-  camera.position.y = 20 + Math.sin(t * 0.018) * 0.5;
-  camera.lookAt(Math.sin(t * 0.015) * 4, 4, -40);
+  camera.position.y = 10 + Math.sin(t * 0.018) * 0.5;
+  camera.lookAt(Math.sin(t * 0.015) * 4, 5, -40);
 
   renderer.render(scene, camera);
 }
