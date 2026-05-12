@@ -2,6 +2,9 @@
 import { Party, DB, showScreen } from '../gameState.js';
 import { isAlive } from '../character.js';
 import { openCharCreateModal } from './charCreateModal.js';
+import { initLocationBackground } from './locationBackground.js';
+
+let _bg = null;
 
 // 選択中のロスター冒険者インデックス
 let _selectedRosterIdx = -1;
@@ -39,10 +42,12 @@ export function initTavernUI() {
   return {
     show() {
       el.style.display = 'flex';
+      _bg ??= initLocationBackground('tavern');
+      if (_bg) _bg.start();
       _selectedRosterIdx = -1;
       renderAll();
     },
-    hide() { el.style.display = 'none'; },
+    hide() { el.style.display = 'none'; if (_bg) _bg.stop(); },
   };
 }
 

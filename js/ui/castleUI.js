@@ -1,5 +1,8 @@
 // js/ui/castleUI.js — お城：旅の目的・王の言葉
 import { showScreen } from '../gameState.js';
+import { initLocationBackground } from './locationBackground.js';
+
+let _bg = null;
 
 // 王の台詞（複数ページ）
 const DIALOGUES = [
@@ -19,10 +22,12 @@ export function initCastleUI() {
   return {
     show() {
       el.style.display = 'flex';
+      _bg ??= initLocationBackground('castle');
+      if (_bg) _bg.start();
       _dialogIdx = 0;
       renderCastle();
     },
-    hide() { el.style.display = 'none'; },
+    hide() { el.style.display = 'none'; if (_bg) _bg.stop(); },
   };
 }
 

@@ -1,6 +1,9 @@
 // js/ui/templeUI.js — 寺院：蘇生・治療
 import { Party, DB, showScreen } from '../gameState.js';
 import { isAlive } from '../character.js';
+import { initLocationBackground } from './locationBackground.js';
+
+let _bg = null;
 
 // 蘇生費用テーブル
 const REVIVE_COST  = { dead: 200, ashes: 500, stoned: 100, poisoned: 50, asleep: 30, paralyzed: 80 };
@@ -15,10 +18,12 @@ export function initTempleUI() {
   return {
     show() {
       el.style.display = 'flex';
+      _bg ??= initLocationBackground('temple');
+      if (_bg) _bg.start();
       _selectedIdx = -1;
       renderRoster();
     },
-    hide() { el.style.display = 'none'; },
+    hide() { el.style.display = 'none'; if (_bg) _bg.stop(); },
   };
 }
 

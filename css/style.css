@@ -202,12 +202,42 @@ html, body {
 
 
 /* ===== Location共通レイアウト ===== */
+/* 3D バックグラウンド canvas */
+.loc-bg-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none; display: block;
+  z-index: 0;
+}
+/* ダークグラデーションオーバレイ */
+.loc-bg-overlay {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(3,1,10,0.08)  0%,
+    rgba(3,1,10,0.42) 22%,
+    rgba(3,1,10,0.82) 50%,
+    rgba(3,1,10,0.97) 100%
+  );
+}
+/* ローディング表示 */
+.loc-loading {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10; pointer-events: none;
+  color: #9080b8; font-size: 0.9rem; letter-spacing: 0.12em;
+  display: flex; align-items: center; gap: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loc-spinner { animation: spin 1.2s linear infinite; display: inline-block; }
+
 .loc-layout {
   width: 100%; height: 100%;
   display: flex; flex-direction: column;
   padding: 16px 20px; gap: 12px;
-  background: radial-gradient(ellipse, #0c0818 0%, #060410 100%);
+  background: transparent;   /* 透明化 — 3D背景を表示 */
   overflow: hidden;
+  position: relative; z-index: 2;
 }
 .loc-header {
   display: flex; align-items: center; gap: 16px;
@@ -228,8 +258,9 @@ html, body {
   display: flex; gap: 16px; flex: 1; overflow: hidden;
 }
 .tavern-left, .tavern-right {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(180,140,255,0.15);
+  background: rgba(3,1,14,0.82);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(180,140,255,0.18);
   border-radius: 6px; padding: 14px;
   display: flex; flex-direction: column; gap: 8px; overflow: hidden;
 }
@@ -248,8 +279,9 @@ html, body {
 /* ===== Temple (寺院) ===== */
 .temple-body { display: flex; flex-direction: column; gap: 14px; flex: 1; overflow: hidden; }
 .temple-npc {
-  background: rgba(255,255,255,0.02); border: 1px solid rgba(180,140,255,0.1);
-  border-radius: 6px; padding: 14px;
+  background: rgba(3,2,18,0.80); backdrop-filter: blur(8px);
+  border: 1px solid rgba(180,140,255,0.15);
+  border-radius: 8px; padding: 14px;
 }
 .npc-text { font-size: 0.9rem; color: #c0b0e0; line-height: 1.8; font-style: italic; }
 .temple-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -265,8 +297,9 @@ html, body {
 .castle-body { display: flex; gap: 16px; flex: 1; overflow: hidden; }
 .castle-npc {
   flex: 1 1 55%;
-  background: rgba(255,255,255,0.02); border: 1px solid rgba(200,180,80,0.15);
-  border-radius: 6px; padding: 18px; display: flex; flex-direction: column; gap: 10px;
+  background: rgba(4,2,12,0.80); backdrop-filter: blur(8px);
+  border: 1px solid rgba(200,180,80,0.18);
+  border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px;
 }
 .castle-king-name { font-size: 0.85rem; letter-spacing: 0.15em; color: #c0b060; }
 .castle-dialogue {
@@ -275,8 +308,9 @@ html, body {
 }
 .castle-lore {
   flex: 1 1 40%;
-  background: rgba(255,255,255,0.02); border: 1px solid rgba(180,140,255,0.1);
-  border-radius: 6px; padding: 14px; overflow-y: auto;
+  background: rgba(4,2,12,0.80); backdrop-filter: blur(8px);
+  border: 1px solid rgba(180,140,255,0.12);
+  border-radius: 8px; padding: 14px; overflow-y: auto;
 }
 .castle-text { font-size: 0.8rem; color: #a09090; line-height: 1.9; white-space: pre-line; }
 
@@ -306,6 +340,8 @@ html, body {
 .shop-gold { font-size: 0.9rem; color: #e0c060; }
 .shop-tabs {
   display: flex; gap: 0; border-bottom: 1px solid rgba(180,140,255,0.15);
+  background: rgba(4,2,12,0.70); backdrop-filter: blur(6px);
+  border-radius: 6px 6px 0 0; padding: 4px 4px 0;
 }
 .shop-tab {
   padding: 0.5em 1.4em; font-size: 0.85rem; letter-spacing: 0.05em; cursor: pointer;
@@ -318,6 +354,8 @@ html, body {
 .shop-body { display: flex; gap: 14px; flex: 1; overflow: hidden; }
 .shop-list {
   flex: 1 1 55%; display: flex; flex-direction: column; gap: 6px; overflow-y: auto;
+  background: rgba(4,2,12,0.75); backdrop-filter: blur(6px);
+  border-radius: 0 0 6px 6px; padding: 8px;
 }
 .shop-item {
   background: rgba(255,255,255,0.03); border: 1px solid rgba(180,140,255,0.12);

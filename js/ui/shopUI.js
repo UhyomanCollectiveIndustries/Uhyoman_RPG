@@ -1,7 +1,9 @@
 // js/ui/shopUI.js — 商店：購入・売却・鑑定
 import { Party, DB, showScreen } from '../gameState.js';
 import { isAlive } from '../character.js';
+import { initLocationBackground } from './locationBackground.js';
 
+let _bg  = null;
 let _tab = 'buy';           // 'buy' | 'sell' | 'identify'
 let _selectedKey = null;    // 選択中アイテム/武器/防具のキー
 let _selectedCharIdx = -1;  // 売却/鑑定時の対象キャラ
@@ -25,6 +27,8 @@ export function initShopUI() {
   return {
     show() {
       el.style.display = 'flex';
+      _bg ??= initLocationBackground('shop');
+      if (_bg) _bg.start();
       _tab = 'buy';
       _selectedKey = null;
       _selectedCharIdx = -1;
@@ -32,7 +36,7 @@ export function initShopUI() {
       renderShop();
       renderGold();
     },
-    hide() { el.style.display = 'none'; },
+    hide() { el.style.display = 'none'; if (_bg) _bg.stop(); },
   };
 }
 
