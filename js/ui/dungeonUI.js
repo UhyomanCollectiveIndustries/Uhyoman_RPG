@@ -157,83 +157,122 @@ function stopDungeon() {
   renderer = null;
 }
 
-// ========== Three.js ==========
+// ============================================================
+// Three.js セットアップ
+// ============================================================
+
+/**
+ * WebGLRenderer を生成して <canvas id="dungeon-canvas"> に紐付ける。
+ * ウィンドウリサイズ時にカメラ・レンダラーを更新するイベントも登録する。
+ */
 function setupRenderer() {
   const canvas = document.getElementById('dungeon-canvas');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+  // antialias: false → 軽量化（ダンジョンはローポリなので問題ない）
   renderer.setSize(canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight);
-  renderer.setPixelRatio(1);
-
+  renderer.setPixelRatio(1); // モバイルでも 1 に固定してパフォーマンス優先
   window.addEventListener('resize', onResize);
 }
 
+/**
+ * ウィンドウサイズが変わったときにレンダラーとカメラを更新する。
+ */
 function onResize() {
   if (!renderer) return;
   const canvas = document.getElementById('dungeon-canvas');
   renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-  if (camera) { camera.aspect = canvas.clientWidth / canvas.clientHeight; camera.updateProjectionMatrix(); }
+  if (camera) {
+    // アスペクト比（横:縦）を更新しないと映像が歪む
+    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+    camera.updateProjectionMatrix(); // 変更を Three.js に反映
+  }
 }
 
+/**
+ * Three.js シーン全体を構築する。
+ * 背景色・霧・カメラ・照明・プレイヤー光源・マップジオメトリを生成する。
+ */
 function buildScene() {
+  // Scene：Three.js で描画するすべてのオブジェクトを入れる「世界」
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000000);
+  scene.background = new THREE.Color(0x000000); // 背景色：真っ黒
+  // Fog（霧）：遠くのオブジェクトが黒に溶けていく線形霧
+  // 第3引数 8 or 3.5 = 霧の終わり距離（明るいほど遠くまで見える）
   scene.fog = new THREE.Fog(0x000000, 2, _lightLevel > 50 ? 8 : 3.5);
 
+  // PerspectiveCamera(視野角, アスペクト比, 近クリップ面, 遠クリップ面)
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 20);
-  placeCamera();
+  placeCamera(); // パーティの現在位置・向きにカメラを配置
 
-  // 環境光 (暗め)
+  // 薄暗い環境光（全体をほんのり照らす）
   scene.add(new THREE.AmbientLight(0x111111, 1));
 
-  // プレイヤー携帯光源
+  // プレイヤーが持つランタン光源（カメラに追従する）
+  // PointLight(色, 強度, 距離)
   const pl = new THREE.PointLight(0xffcc88, 1.5, 4);
   pl.name = 'playerLight';
-  camera.add(pl);
-  scene.add(camera);
+  camera.add(pl);    // カメラの子にすることで自動追従
+  scene.add(camera); // カメラ自体もシーンに追加（子オブジェクトのため必要）
 
-  buildGeometry();
+  buildGeometry(); // マップタイルのメッシュ（壁・床・天井・階段）を生成
 }
 
+/**
+ * マップ 2D 配列から Three.js のメッシュ（3D ポリゴン）を生成してシーンに追加する。
+ * マップ記号ごとにマテリアル（見た目）を変える。
+ */
 function buildGeometry() {
-  const wallMat  = new THREE.MeshLambertMaterial({ color: 0x4a3a3a });
-  const floorMat = new THREE.MeshLambertMaterial({ color: 0x2a2020 });
-  const ceilMat  = new THREE.MeshLambertMaterial({ color: 0x1a1515 });
-  const stairMat = new THREE.MeshLambertMaterial({ color: 0xc0a030 });
-  const startMat = new THREE.MeshLambertMaterial({ color: 0x306030 });
+  // MeshLambertMaterial：拡散反射のみ計算する軽量マテリアル（光に反応する）
+  const wallMat  = new THREE.MeshLambertMaterial({ color: 0x4a3a3a }); // 壁：焦茶
+  const floorMat = new THREE.MeshLambertMaterial({ color: 0x2a2020 }); // 床：暗い茶
+  const ceilMat  = new THREE.MeshLambertMaterial({ color: 0x1a1515 }); // 天井：ほぼ黒
+  const stairMat = new THREE.MeshLambertMaterial({ color: 0xc0a030 }); // 降り階段：金色
+  const startMat = new THREE.MeshLambertMaterial({ color: 0x306030 }); // スタート：緑
 
-  // 壁テクスチャ風に石ブロック模様 (手続き)
+  // マップ全マスをループして対応するジオメトリを生成
   for (let r = 0; r < _rows; r++) {
     for (let c = 0; c < _cols; c++) {
       const tile = _map[r][c];
-      const wx = c * CELL, wz = r * CELL;
+      // Three.js 座標系：列 → X 軸、行 → Z 軸
+      const wx = c * CELL; // マスのワールド X 座標（左端）
+      const wz = r * CELL; // マスのワールド Z 座標（上端）
 
       if (tile === '1') {
-        // 壁
-        const geo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
+        // 壁マス：ボックスジオメトリを配置
+        // BoxGeometry(幅, 高さ, 奥行き)
+        const geo  = new THREE.BoxGeometry(CELL, WALL_H, CELL);
         const mesh = new THREE.Mesh(geo, wallMat);
+        // position はボックスの中心。マスの中心 = wx + CELL/2
         mesh.position.set(wx + CELL/2, WALL_H/2, wz + CELL/2);
         scene.add(mesh);
       } else {
-        // 床
-        addPlane(floorMat, wx + CELL/2, 0, wz + CELL/2, -Math.PI/2);
-        // 天井
-        addPlane(ceilMat,  wx + CELL/2, WALL_H, wz + CELL/2, Math.PI/2);
+        // 通路系マス：床と天井の平面を配置
+        addPlane(floorMat, wx + CELL/2, 0,      wz + CELL/2, -Math.PI/2); // 床（上向き）
+        addPlane(ceilMat,  wx + CELL/2, WALL_H, wz + CELL/2,  Math.PI/2); // 天井（下向き）
 
         if (tile === 'E') {
-          // 降り階段
-          const s = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), stairMat);
+          // 降り階段：目立つ金色ボックス + 黄色い点光源
+          const s = new THREE.Mesh(
+            new THREE.BoxGeometry(0.6, 0.15, 0.6),
+            stairMat
+          );
           s.position.set(wx + CELL/2, 0.08, wz + CELL/2);
           scene.add(s);
+          // 階段を照らす小さな点光源
           const sl = new THREE.PointLight(0xffdd44, 2, 3);
           sl.position.set(wx + CELL/2, 0.5, wz + CELL/2);
           scene.add(sl);
         } else if (tile === 'S' || tile === 'U') {
-          const s = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.6), startMat);
+          // スタート地点・上り階段：緑色ボックス
+          const s = new THREE.Mesh(
+            new THREE.BoxGeometry(0.6, 0.1, 0.6),
+            startMat
+          );
           s.position.set(wx + CELL/2, 0.05, wz + CELL/2);
           scene.add(s);
         }
 
-        // 松明 (ランダム)
+        // 8% の確率でランダム松明を配置
         if (tile === '0' && Math.random() < 0.08) addTorch(wx + CELL/2, wz + CELL/2);
       }
     }
