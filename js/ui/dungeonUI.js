@@ -471,13 +471,23 @@ function animLoop() {
   renderer.render(scene, camera); // シーンを描画
 }
 
+// ============================================================
+// 着地処理（マスに到達したとき）
+// ============================================================
+
+/**
+ * プレイヤーが新しいマスに着地したとき呼ばれる。
+ * 階段チェック・ランダムエンカウントを処理する。
+ */
 function onStepLand() {
-  const tile = _map[Party.pos.z]?.[Party.pos.x];
-  updateHUD();
-  drawMinimap();
+  const tile = _map[Party.pos.z]?.[Party.pos.x]; // 現在マスの記号
+  updateHUD();   // HP バーなど更新
+  drawMinimap(); // ミニマップを再描画（現在位置を更新）
 
   if (tile === 'E') {
+    // 降り階段マス：エンターキーで次の階へ
     setMsg('【降り階段】 ここから次の階へ…\n[Enter]で降りる');
+    // { once: true } でイベントリスナーを一回だけ発火させる
     document.addEventListener('keydown', function onEnter(e) {
       if (e.code === 'Enter' || e.code === 'Space') {
         document.removeEventListener('keydown', onEnter);
@@ -487,32 +497,43 @@ function onStepLand() {
     return;
   }
 
-  // ランダムエンカウント
-  if (['0','S','U'].includes(tile) && Math.random() < 0.18) {
+  // ランダムエンカウント：18% の確率で発生
+  // 通路（'0'）、スタート（'S'）、上り階段（'U'）のマスのみ
+  if (['0', 'S', 'U'].includes(tile) && Math.random() < 0.18) {
     triggerEncounter();
   }
 }
 
+/**
+ * ランダムエンカウントを起動する。
+ * フロアに応じたモンスターテーブルから敵を抽選し、battle.js を呼び出す。
+ */
 function triggerEncounter() {
   const floor = Party.floor;
-  // フロアに応じたモンスター
+  // フロア別モンスター出現テーブル（index 0=B1F, 1=B2F, 2=B3F以降）
   const table = [
-    ['kobold','giant_rat','slime'],
-    ['orc','zombie','skeleton'],
-    ['skeleton','werewolf','vampire'],
+    ['kobold', 'giant_rat', 'slime'],     // B1F：弱い敵
+    ['orc', 'zombie', 'skeleton'],         // B2F：中程度
+    ['skeleton', 'werewolf', 'vampire'],   // B3F以降：強い敵
   ];
-  const pool = table[Math.min(floor-1, table.length-1)];
-  const count = 1 + Math.floor(Math.random() * 3);
-  const enemyIds = Array.from({ length: count }, () => pool[Math.floor(Math.random()*pool.length)]);
+  const pool  = table[Math.min(floor - 1, table.length - 1)];
+  // 1〜3 体をランダムに選ぶ
+  const count    = 1 + Math.floor(Math.random() * 3);
+  const enemyIds = Array.from({ length: count }, () => pool[Math.floor(Math.random() * pool.length)]);
   setMsg(`モンスターが現れた！ ${enemyIds.map(id => DB.monsters[id]?.name).join(', ')}`);
 
+  // 少し間をおいてバトル画面へ遷移
   setTimeout(() => {
     startBattle(enemyIds, () => {
+      // 戦闘後はダンジョンに戻る
       showScreen('dungeon');
     });
   }, 800);
 }
 
+/**
+ * 次の階へ降りる。マップが存在しなければキャンセルする。
+ */
 function goNextFloor() {
   Party.floor++;
   if (!DB.maps[Party.floor]) {
@@ -520,69 +541,117 @@ function goNextFloor() {
     Party.floor--;
     return;
   }
-  stopDungeon();
-  setTimeout(() => { startDungeon(); }, 100);
+  stopDungeon(); // 現在のシーンを破棄
+  setTimeout(() => { startDungeon(); }, 100); // 少し待ってから新フロアを構築
 }
 
+/**
+ * ダンジョンを出て町に戻る。
+ */
 function leaveD() {
   showScreen('town');
 }
 
-// ========== HUD / Minimap ==========
+// ============================================================
+// HUD（ヘッドアップディスプレイ）とミニマップ
+// ============================================================
+
+/**
+ * 画面右上の HUD（キャラ名・フロア・パーティ HP バー）を更新する。
+ */
 function updateHUD() {
   const p = Party.members[0];
   if (!p) return;
+  // 先頭キャラのレベル表示
   const hudEl = document.getElementById('d-hud-name');
   if (hudEl) hudEl.textContent = `${p.name} Lv.${p.level}`;
 
-  // パーティ全員のHPバー
+  // パーティ全員の HP バーを再構築
   const list = document.getElementById('d-party-strip');
   if (!list) return;
   list.innerHTML = '';
   Party.members.forEach((c, i) => {
     const span = document.createElement('div');
     span.className = 'd-party-member';
-    span.innerHTML = `<span>${c.name}</span><div class="bar-bg sm"><div class="bar hp-bar" style="width:${Math.max(0,c.hp/c.maxHp*100)}%"></div></div>`;
+    // style="width: HP割合%" で HP バーの幅を表現
+    span.innerHTML = `
+      <span>${c.name}</span>
+      <div class="bar-bg sm">
+        <div class="bar hp-bar" style="width:${Math.max(0, c.hp / c.maxHp * 100)}%"></div>
+      </div>
+    `;
     list.appendChild(span);
   });
 
-  // フロア
+  // フロア表示（例：「B1F」）
   const flEl = document.getElementById('d-floor-label');
   if (flEl) flEl.textContent = `B${Party.floor}F`;
 }
 
+/**
+ * ミニマップ（<canvas id="minimap-canvas">）を描画する。
+ * 壁=暗色、通路=茶色、階段=黄色、スタート=緑、プレイヤー=水色で表示。
+ * 向き矢印も描画する。
+ */
 function drawMinimap() {
   const canvas = document.getElementById('minimap-canvas');
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d'); // 2D 描画コンテキストを取得
   const W = canvas.width, H = canvas.height;
-  const cw = W / _cols, ch = H / _rows;
-  ctx.clearRect(0, 0, W, H);
+  // 1マスあたりのピクセル数
+  const cw = W / _cols;
+  const ch = H / _rows;
+  ctx.clearRect(0, 0, W, H); // 前フレームの描画を消去
 
+  // マップ全マスを色分けして塗りつぶす
   for (let r = 0; r < _rows; r++) {
     for (let c = 0; c < _cols; c++) {
       const t = _map[r][c];
-      ctx.fillStyle = t === '1' ? '#1a1010' : t === 'E' ? '#ffdd44' : t === 'S' || t === 'U' ? '#44ff88' : '#5a3a3a';
-      ctx.fillRect(c*cw+0.5, r*ch+0.5, cw-1, ch-1);
+      ctx.fillStyle =
+        t === '1' ? '#1a1010' :              // 壁：ほぼ黒
+        t === 'E' ? '#ffdd44' :               // 降り階段：黄
+        (t === 'S' || t === 'U') ? '#44ff88' : // スタート/上り：緑
+        '#5a3a3a';                             // 通路：暗い茶
+      ctx.fillRect(c * cw + 0.5, r * ch + 0.5, cw - 1, ch - 1);
     }
   }
 
-  // プレイヤー
+  // プレイヤーを水色の円で表示
   ctx.fillStyle = '#00ffcc';
-  const px = Party.pos.x * cw + cw/2, pz = Party.pos.z * ch + ch/2;
-  ctx.beginPath(); ctx.arc(px, pz, Math.min(cw, ch)*0.4, 0, Math.PI*2); ctx.fill();
-  // 向き
+  const px = Party.pos.x * cw + cw / 2; // マスの中心 X
+  const pz = Party.pos.z * ch + ch / 2; // マスの中心 Z
+  ctx.beginPath();
+  ctx.arc(px, pz, Math.min(cw, ch) * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 向き矢印（白い線）
   const d = DIRS[Party.dir];
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(px, pz); ctx.lineTo(px + d.dx*cw*0.8, pz + d.dz*ch*0.8); ctx.stroke();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(px, pz);
+  ctx.lineTo(px + d.dx * cw * 0.8, pz + d.dz * ch * 0.8);
+  ctx.stroke();
 }
 
-let _msgTimer;
+// ============================================================
+// メッセージ表示
+// ============================================================
+
+let _msgTimer; // タイムアウト ID（前回のタイマーをキャンセルするために保持）
+
+/**
+ * 画面下部のメッセージエリアにテキストを表示する。
+ * 4 秒後に自動的にフェードアウトする。
+ * @param {string} text - 表示するメッセージ（\n で改行可）
+ */
 function setMsg(text) {
   const el = document.getElementById('d-msg');
   if (!el) return;
-  el.innerHTML = text.replace(/\n/g, '<br>');
-  el.style.opacity = '1';
-  clearTimeout(_msgTimer);
-  _msgTimer = setTimeout(() => { el.style.opacity = '0'; }, 4000);
+  el.innerHTML = text.replace(/\n/g, '<br>'); // 改行を HTML タグに変換
+  el.style.opacity = '1';                       // 表示
+  clearTimeout(_msgTimer);                       // 前回のタイマーをキャンセル
+  _msgTimer = setTimeout(() => {
+    el.style.opacity = '0'; // 4 秒後に非表示（CSS transition でフェード）
+  }, 4000);
 }
