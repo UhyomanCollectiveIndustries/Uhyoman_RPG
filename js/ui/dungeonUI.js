@@ -1,4 +1,28 @@
-// js/ui/dungeonUI.js — ダンジョン探索(3D FPS + 1マスずつ移動)
+// ============================================================
+// js/ui/dungeonUI.js — ダンジョン探索（3D FPS 風 + 1マスずつ移動）
+// ============================================================
+//
+// このファイルの役割：
+//   3D ダンジョンの描画・探索ロジックをすべて管理します。
+//   Three.js でリアルタイムレンダリングし、キーボード（WASD / 矢印キー）と
+//   画面上の仮想ボタンで操作できます。
+//
+// 全体の流れ：
+//   1. initDungeonUI() → show() → startDungeon()
+//   2. startDungeon() でマップを読み込み、シーンを構築して animLoop() を開始
+//   3. キー入力 → tryMove()/startTurn() でアニメーション変数を設定
+//   4. animLoop() の毎フレームでカメラ位置を補間し、着地したら onStepLand()
+//   5. onStepLand() でランダムエンカウント(18%)・階段チェックを実行
+//   6. hide() → stopDungeon() でアニメーション停止・レンダラー解放
+//
+// マップ記号（.txt ファイルの定義）：
+//   '1' = 壁、'0' = 通路、'S' = スタート地点、'E' = 降り階段、'U' = 上り階段
+//
+// アニメーション仕組み：
+//   _animProgress を毎フレーム増やしてイージング関数で補間する。
+//   _animType = 'move' なら位置補間、'turn' なら回転補間。
+//   アニメーション中（_moving = true）は新規入力を無視する。
+// ============================================================
 import * as THREE from 'three';
 import { Party, DB, showScreen } from '../gameState.js';
 import { startBattle } from '../battle.js';
@@ -27,7 +51,7 @@ let _animToYaw = 0;
 let _yaw = 0;
 let _animId;
 // 照明レベル (0=暗闇, 100=完全明るさ)
-let _lightLevel = 0;
+let _lightLevel = 50;
 
 const TURN_SPEED = 8;  // ラジアン/秒
 const MOVE_SPEED = 6;  // セル/秒
