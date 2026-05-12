@@ -279,123 +279,196 @@ function buildGeometry() {
   }
 }
 
+/**
+ * 水平な板（床・天井用）を生成してシーンに追加する。
+ * @param {THREE.Material} mat - マテリアル
+ * @param {number} x - ワールド X
+ * @param {number} y - ワールド Y
+ * @param {number} z - ワールド Z
+ * @param {number} rx - X 軸回転角度（ラジアン）
+ */
 function addPlane(mat, x, y, z, rx) {
   const geo = new THREE.PlaneGeometry(CELL, CELL);
-  const m = new THREE.Mesh(geo, mat);
+  const m   = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z);
-  m.rotation.x = rx;
+  m.rotation.x = rx; // -π/2 で上向き（床）、+π/2 で下向き（天井）
   scene.add(m);
 }
 
+/**
+ * 松明（炎の球体 + 点光源）を指定座標に追加する。
+ * @param {number} x - ワールド X（マスの中心）
+ * @param {number} z - ワールド Z（マスの中心）
+ */
 function addTorch(x, z) {
+  // MeshBasicMaterial：光の影響を受けない自己発光マテリアル（炎の見た目に最適）
   const mat = new THREE.MeshBasicMaterial({ color: 0xff8822 });
-  const f = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), mat);
-  f.position.set(x, WALL_H - 0.1, z);
+  const f   = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), mat);
+  f.position.set(x, WALL_H - 0.1, z); // 天井ギリギリ下
   scene.add(f);
+  // 周囲を暖かく照らすオレンジの点光源
   const l = new THREE.PointLight(0xff6600, 1.2, 5);
-  l.position.copy(f.position);
+  l.position.copy(f.position); // 炎の位置と同じ場所
   scene.add(l);
 }
 
+/**
+ * Party の現在位置・向きにカメラを配置する。
+ * アニメーション開始前と完了後に呼ばれる。
+ */
 function placeCamera() {
   if (!camera) return;
+  // CELL/2 を足すことで「マスの中心」に配置
   camera.position.set(
     Party.pos.x * CELL + CELL/2,
-    WALL_H * 0.55,
+    WALL_H * 0.55,            // 壁の高さの 55% = プレイヤーの目の高さ
     Party.pos.z * CELL + CELL/2
   );
+  // rotation.order = 'YXZ'：Yaw（左右）→ Pitch（上下）の順で回転
   camera.rotation.order = 'YXZ';
-  camera.rotation.y = _yaw;
-  camera.rotation.x = 0;
+  camera.rotation.y = _yaw; // 向きを設定
+  camera.rotation.x = 0;    // 上下は水平に固定
 }
 
+/**
+ * dir（0〜3 の方向インデックス）を Y 軸角度（ラジアン）に変換する。
+ * Three.js では Y 軸回転が「向き」に対応する。
+ * @param {number} dir - 0=北, 1=東, 2=南, 3=西
+ * @returns {number} Y 軸角度（ラジアン）
+ */
 function dirToYaw(dir) {
+  // 北=π（Z+方向を向く）、東=-π/2、南=0、西=π/2
   return [Math.PI, -Math.PI/2, 0, Math.PI/2][dir];
 }
 
-// ========== 移動・回転 ==========
+// ============================================================
+// 移動・旋回
+// ============================================================
+
+/**
+ * 前進または後退を試みる。
+ * 移動先が壁なら弾かれ、通路なら移動アニメーションを開始する。
+ * @param {number} relDir - 0=前進, 2=後退
+ */
 function tryMove(relDir) {
-  // relDir: 0=前, 2=後
+  // 後退時は 180° 反転した方向に進む
   const faceDir = (Party.dir + relDir) % 4;
-  const d = DIRS[faceDir];
-  const nx = Party.pos.x + d.dx;
-  const nz = Party.pos.z + d.dz;
+  const d  = DIRS[faceDir];  // その方向のベクトル
+  const nx = Party.pos.x + d.dx; // 移動後の X
+  const nz = Party.pos.z + d.dz; // 移動後の Z
   if (!canWalk(nx, nz)) {
     setMsg('壁だ！');
-    shakeCamera();
+    shakeCamera(); // カメラを揺らして「ぶつかった」感を演出
     return;
   }
   startMove(nx, nz, relDir === 0);
 }
 
+/**
+ * 指定マスに移動可能かチェックする。
+ * マップ範囲外・壁マス('1')なら false。
+ * @param {number} x - チェックするマスの X
+ * @param {number} z - チェックするマスの Z
+ * @returns {boolean}
+ */
 function canWalk(x, z) {
-  if (z < 0 || z >= _rows || x < 0 || x >= _cols) return false;
-  return _map[z][x] !== '1';
+  if (z < 0 || z >= _rows || x < 0 || x >= _cols) return false; // 範囲外
+  return _map[z][x] !== '1'; // 壁でなければ歩ける
 }
 
+/**
+ * 移動アニメーションの状態変数を初期化する。
+ * 実際の補間は animLoop() が毎フレーム行う。
+ * @param {number} nx - 目標 X マス
+ * @param {number} nz - 目標 Z マス
+ * @param {boolean} forward - 前進なら true（現在未使用）
+ */
 function startMove(nx, nz, forward) {
-  _moving = true;
-  _animType = 'move';
-  _animProgress = 0;
-  _animFrom = { ...Party.pos };
-  _animTo   = { x: nx, z: nz };
+  _moving       = true;             // アニメーション中フラグ ON
+  _animType     = 'move';
+  _animProgress = 0;                // 進行度リセット
+  _animFrom     = { ...Party.pos }; // 現在位置をコピー
+  _animTo       = { x: nx, z: nz }; // 目標位置
 }
 
+/**
+ * 旋回アニメーションの状態変数を初期化する。
+ * @param {number} sign - +1=右旋回、-1=左旋回
+ */
 function startTurn(sign) {
-  _moving = true;
-  _animType = 'turn';
+  _moving       = true;
+  _animType     = 'turn';
   _animProgress = 0;
-  _animFromYaw = _yaw;
-  Party.dir = (Party.dir + 4 + sign) % 4;
-  _animToYaw = _yaw + sign * Math.PI/2;
+  _animFromYaw  = _yaw;                           // 旋回前の角度を保存
+  Party.dir     = (Party.dir + 4 + sign) % 4;    // 方向インデックスを更新（4で割り余りで循環）
+  _animToYaw    = _yaw + sign * Math.PI / 2;      // 90° 分だけ回転
 }
 
+/**
+ * カメラをランダムに小刻みに揺らす「壁衝突」演出。
+ */
 function shakeCamera() {
-  // 簡易カメラシェイク
   if (!camera) return;
-  const orig = camera.position.clone();
+  const orig = camera.position.clone(); // 元の位置を記憶
   let t = 0;
   const shake = setInterval(() => {
     t++;
-    camera.position.x = orig.x + (Math.random()-0.5)*0.04;
-    if (t > 6) { camera.position.copy(orig); clearInterval(shake); }
-  }, 30);
+    camera.position.x = orig.x + (Math.random() - 0.5) * 0.04; // ±0.02 ランダム
+    if (t > 6) {
+      camera.position.copy(orig); // 6 回後に元に戻す
+      clearInterval(shake);
+    }
+  }, 30); // 30ms 間隔（= 約 33fps の揺れ）
 }
 
-// ========== アニメーションループ ==========
+// ============================================================
+// アニメーションループ
+// ============================================================
+
+/**
+ * requestAnimationFrame で毎フレーム呼ばれるメインループ。
+ * アニメーション中は補間計算、それ以外は静止レンダリングを行う。
+ */
 function animLoop() {
-  _animId = requestAnimationFrame(animLoop);
+  _animId = requestAnimationFrame(animLoop); // 次フレームも自分を呼ぶ（ループ）
   if (!renderer || !scene || !camera) return;
-  const dt = clock.getDelta();
+  const dt = clock.getDelta(); // 前フレームからの経過秒数
 
   if (_moving) {
-    _animProgress += dt * (_animType === 'turn' ? TURN_SPEED : MOVE_SPEED);
-
+    // ── 移動アニメーション ────────────────────────────────
     if (_animType === 'move') {
-      const t = Math.min(_animProgress, 1);
-      const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+      _animProgress += dt * MOVE_SPEED; // 進行度を増やす
+      const t    = Math.min(_animProgress, 1); // 0〜1 にクランプ
+      // イージング関数（ease in-out quad）：最初と最後は緩やか、中間は速い
+      // t < 0.5 なら加速フェーズ、t >= 0.5 なら減速フェーズ
+      const ease = t < 0.5 ? 2*t*t : -1 + (4 - 2*t) * t;
+      // 開始位置と目標位置の間を ease で線形補間
       camera.position.x = (_animFrom.x + (_animTo.x - _animFrom.x) * ease) * CELL + CELL/2;
       camera.position.z = (_animFrom.z + (_animTo.z - _animFrom.z) * ease) * CELL + CELL/2;
       if (_animProgress >= 1) {
-        Party.pos = { ..._animTo };
-        placeCamera();
+        Party.pos = { ..._animTo }; // パーティ位置を確定
+        placeCamera();              // 正確な位置にスナップ
         _moving = false;
-        onStepLand();
+        onStepLand();               // マスに着地したときの処理
       }
-    } else if (_animType === 'turn') {
-      const t = Math.min(_animProgress / (Math.PI/2), 1);
-      const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+    }
+    // ── 旋回アニメーション ────────────────────────────────
+    else if (_animType === 'turn') {
+      _animProgress += dt * TURN_SPEED;
+      // 旋回は π/2（90°）分なので、進行度を π/2 で割って 0〜1 に正規化
+      const t    = Math.min(_animProgress / (Math.PI / 2), 1);
+      const ease = t < 0.5 ? 2*t*t : -1 + (4 - 2*t) * t;
       _yaw = _animFromYaw + (_animToYaw - _animFromYaw) * ease;
       camera.rotation.y = _yaw;
       if (t >= 1) {
-        _yaw = _animToYaw;
+        _yaw = _animToYaw;          // 最終角度に確定
         camera.rotation.y = _yaw;
         _moving = false;
       }
     }
   }
 
-  renderer.render(scene, camera);
+  renderer.render(scene, camera); // シーンを描画
 }
 
 function onStepLand() {
