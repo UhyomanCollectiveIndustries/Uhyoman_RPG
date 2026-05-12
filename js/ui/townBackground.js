@@ -1,18 +1,47 @@
+// ============================================================
 // js/ui/townBackground.js — Three.js 3D 町背景
-// FBX 城モデル + 星空 + 松明の炎と光 + 立ち昇る火の粉
+// ============================================================
+//
+// このファイルの役割：
+//   タウン（町）画面の背景を Three.js で 3D レンダリングします。
+//   65MB の FBX 城モデル（RenderCrate-Castles.fbx）を読み込み、
+//   PBR テクスチャ・照明・星空・松明・火の粉パーティクルで
+//   ファンタジー風の夜景を演出します。
+//
+// 主要な機能：
+//   1. FBX 城モデルの読み込みと PBR マテリアル割り当て
+//   2. 2000 個の星フィールド（BufferGeometry + Points）
+//   3. 5 本の松明（PointLight + 炎球体 + ハロー球体）
+//   4. 120 個の火の粉パーティクル（毎フレーム上昇・リセット）
+//   5. カメラの低速ドリフト（sin 関数によるゆっくりした揺れ）
+//
+// PBR テクスチャのバリエーション（4 種類）：
+//   dark  = Variation-Dark_Bricks  → 塔に使用
+//   brown = Variation-Brown_Bricks → 壁に使用
+//   old   = Variation-Old_Bricks   → 構造物に使用
+//   light = Variation_Light_Bricks → 未使用（予備）
+//
+// エクスポート：
+//   initTownBackground() → { start(), stop() } を返す
+//   start() : アニメーションループ開始
+//   stop()  : アニメーションループ停止
+// ============================================================
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
-let renderer, scene, camera, animId;
-let torchLights = [];
-let emberSystems = [];
-let clock = new THREE.Clock();
+// ── モジュール変数 ────────────────────────────────────────────
+let renderer, scene, camera, animId; // Three.js 基本オブジェクト
+let torchLights   = []; // 松明の PointLight を格納する配列（フリッカー計算に使う）
+let emberSystems  = []; // 火の粉パーティクルシステムを格納する配列
+let clock = new THREE.Clock(); // アニメーション時間計測（経過秒を取得）
 
 /* ── テクスチャユーティリティ ──────────────────────────────────── */
+// TextureLoader：PNG/JPG テクスチャを GPU にアップロードするクラス
 const TEX_LOADER = new THREE.TextureLoader();
+// Map：同じ URL のテクスチャを二重ロードしないためのキャッシュ（URL → Texture オブジェクト）
 const TEX_CACHE  = new Map();
 
-// 4つのバリエーションパス
+// PBR テクスチャの 4 バリエーションパス（フォルダ名のみ）
 const VARIATIONS = {
   dark:  '/3Dobject_data/castle/maps/Variation-Dark_Bricks/',
   brown: '/3Dobject_data/castle/maps/Variation-Brown_Bricks/',
@@ -20,134 +49,206 @@ const VARIATIONS = {
   light: '/3Dobject_data/castle/maps/Variation_Light_Bricks/',
 };
 
+/**
+ * テクスチャを URL から読み込み、キャッシュに保存して返す。
+ * 同じ URL は 2 回目以降キャッシュから返すため、読み込みが 1 回で済む。
+ * @param {string}  url  - テクスチャファイルの URL
+ * @param {boolean} srgb - true = sRGB 空間（BaseColor など）、false = 線形空間（法線・粗さなど）
+ * @returns {THREE.Texture}
+ */
 function getTex(url, srgb = true) {
   if (!TEX_CACHE.has(url)) {
     const t = TEX_LOADER.load(url);
+    // colorSpace：色空間の設定。BaseColor は sRGB、法線・粗さなどは LinearSRGB。
     t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
     TEX_CACHE.set(url, t);
   }
   return TEX_CACHE.get(url);
 }
 
+/**
+ * PBR マテリアルを生成する。
+ * MeshStandardMaterial は物理ベースレンダリング（PBR）を行うマテリアル。
+ * 5 枚のテクスチャマップ（BaseColor, Normal, Roughness, AO, Metallic）を設定する。
+ * @param {string} prefix - ファイル名の前部分（例: 'Castle_Towers_'）
+ * @param {string} base   - テクスチャフォルダのベース URL（VARIATIONS の値）
+ * @returns {THREE.MeshStandardMaterial}
+ */
 function makeMat(prefix, base) {
   return new THREE.MeshStandardMaterial({
-    map:          getTex(base + prefix + 'BaseColor.png'),
-    normalMap:    getTex(base + prefix + 'Normal.png',            false),
-    roughnessMap: getTex(base + prefix + 'Roughness.png',         false),
-    aoMap:        getTex(base + prefix + 'Ambient_Occlusion.png', false),
-    metalnessMap: getTex(base + prefix + 'Metallic.png',          false),
-    roughness: 0.80,
-    metalness: 0.05,
+    map:          getTex(base + prefix + 'BaseColor.png'),           // ベースカラー（色）
+    normalMap:    getTex(base + prefix + 'Normal.png',            false), // 法線マップ（凹凸）
+    roughnessMap: getTex(base + prefix + 'Roughness.png',         false), // 粗さ（光沢）
+    aoMap:        getTex(base + prefix + 'Ambient_Occlusion.png', false), // 遮蔽（影の濃さ）
+    metalnessMap: getTex(base + prefix + 'Metallic.png',          false), // 金属度
+    roughness: 0.80, // デフォルト粗さ（マップに上書きされる）
+    metalness: 0.05, // デフォルト金属度
   });
 }
 
+// ── 松明の X 座標（5 本分） ──────────────────────────────────
+// プレイヤー手前の位置に並べる
 const TORCH_X = [-30, -15, 0, 15, 30];
-const TORCH_Z = 5;  // 手前に移動
+const TORCH_Z = 5;  // カメラ手前に移動して近くに見せる
 
+/**
+ * 町背景の Three.js シーンを初期化する。
+ * <canvas id="town-bg-canvas"> に描画する。
+ * @returns {{ start: Function, stop: Function } | null}
+ */
 export function initTownBackground() {
   const canvas = document.getElementById('town-bg-canvas');
   if (!canvas) return null;
 
-  // ── Renderer ────────────────────────────────────────────
+  // ── WebGLRenderer ──────────────────────────────────────────
+  // antialias: false → 軽量化（星・炎は小さいのでジャギーが目立たない）
   renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // 最大 1.5 倍に制限
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // ACESFilmic：映画で使われるトーンマッピング。ハイライトを自然に圧縮する
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 2.2;
+  renderer.toneMappingExposure = 2.2; // 明るさスケール（1.0 = 標準）
 
-  // ── Scene ────────────────────────────────────────────────
+  // ── Scene ────────────────────────────────────────────────────
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0d0825);
+  scene.background = new THREE.Color(0x0d0825); // 深い紫がかった夜色
+  // FogExp2：指数的に濃くなる霧。遠くの城が靄に消えるような雰囲気を作る
+  // 0.008 は霧の濃さ係数（大きいほど早く霧に消える）
   scene.fog = new THREE.FogExp2(0x0d0825, 0.008);
 
-  // ── Camera ───────────────────────────────────────────────
+  // ── Camera ───────────────────────────────────────────────────
+  // PerspectiveCamera(視野角, アスペクト比, 近クリップ, 遠クリップ)
   camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 500);
-  camera.position.set(0, 10, 55);
-  camera.lookAt(0, 5, -40);
+  camera.position.set(0, 10, 55);  // 高さ 10、手前 55 の位置から
+  camera.lookAt(0, 5, -40);        // 城の方向（奥深く）を見る
 
-  // ── Lighting ─────────────────────────────────────────────
+  // ── Lighting ─────────────────────────────────────────────────
+  // AmbientLight：全体を均一に照らす環境光（月明かりの青みがかった色）
   scene.add(new THREE.AmbientLight(0x5060a0, 5.0));
-  const moonLight = new THREE.DirectionalLight(0x8090d0, 5.0);
-  moonLight.position.set(-80, 100, 30);
+
+  // DirectionalLight：方向付き平行光源（太陽や月のような遠い光源をシミュレート）
+  const moonLight = new THREE.DirectionalLight(0x8090d0, 5.0); // 月光（青白）
+  moonLight.position.set(-80, 100, 30); // 左斜め上後方から照らす
   scene.add(moonLight);
-  // 正面からの補助ライト
-  const fillLight = new THREE.DirectionalLight(0x6080c8, 2.5);
-  fillLight.position.set(0, 30, 60);
+
+  const fillLight = new THREE.DirectionalLight(0x6080c8, 2.5); // 正面補助ライト
+  fillLight.position.set(0, 30, 60);    // カメラ側（手前）から照らす
   scene.add(fillLight);
-  // 上方からの補助
-  const topLight = new THREE.DirectionalLight(0x4050a8, 2.0);
-  topLight.position.set(0, 60, 0);
+
+  const topLight = new THREE.DirectionalLight(0x4050a8, 2.0);  // 上部補助ライト
+  topLight.position.set(0, 60, 0);       // 真上から照らす
   scene.add(topLight);
 
-  // ── Contents ─────────────────────────────────────────────
-  buildStars();
-  buildGround();
-  buildFBXCity();
-  buildTorches();
-  buildEmbers();
+  // ── コンテンツ構築 ────────────────────────────────────────────
+  buildStars();     // 星空フィールドを生成
+  buildGround();    // 地面の平面を生成
+  buildFBXCity();   // FBX 城モデルを非同期で読み込む
+  buildTorches();   // 松明（柄 + 炎 + 点光源）を生成
+  buildEmbers();    // 火の粉パーティクルシステムを生成
 
   window.addEventListener('resize', onResize);
   return { start, stop };
 }
 
 /* ── 星フィールド ─────────────────────────────────────────────── */
+/**
+ * 2000 個の星を球殻状に配置するパーティクルシステムを生成する。
+ * BufferGeometry + Float32Array で GPU に直接頂点データを渡す高速な実装。
+ */
 function buildStars() {
   const count = 2000;
+  // Float32Array：JavaScript の通常の配列よりメモリ効率が良い型付き配列
+  // 1 つの星 = [x, y, z] の 3 要素 → count * 3 個
   const pos = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
+    // 球面上にランダムに点を配置する数学的手法：
+    //   theta = 水平角（0〜360°）
+    //   phi   = 仰角（sin で変換することで球面上に均一分布）
     const theta = Math.random() * Math.PI * 2;
-    const phi   = Math.acos(2 * Math.random() - 1);
-    const r     = 180 + Math.random() * 60;
-    pos[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
-    pos[i * 3 + 1] = Math.abs(r * Math.cos(phi)) + 5;
-    pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    const phi   = Math.acos(2 * Math.random() - 1); // 均一な球面分布
+    const r     = 180 + Math.random() * 60;          // 半径 180〜240
+    pos[i * 3]     = r * Math.sin(phi) * Math.cos(theta); // X
+    pos[i * 3 + 1] = Math.abs(r * Math.cos(phi)) + 5;     // Y（abs で地面以下は出ない）
+    pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta); // Z
   }
+  // BufferGeometry：頂点データを直接 GPU バッファに格納する高性能ジオメトリ
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); // 3要素ずつ位置として登録
+  // PointsMaterial：点群（パーティクル）用マテリアル
   const mat = new THREE.PointsMaterial({
-    color: 0xe8dfd8, size: 0.35, sizeAttenuation: true,
-    transparent: true, opacity: 0.95,
+    color: 0xe8dfd8,         // 薄いベージュ（暖かみのある星の色）
+    size: 0.35,              // 点のサイズ（世界座標単位）
+    sizeAttenuation: true,   // 遠くの星は小さく見える（遠近感）
+    transparent: true,
+    opacity: 0.95,
   });
+  // Points：BufferGeometry の頂点を点として描画するオブジェクト
   scene.add(new THREE.Points(geo, mat));
 }
 
-/* ── 地面 ──────────────────────────────────────────────────────── */
+/* ── 地面 ─────────────────────────────────────────────────────── */
+/**
+ * 地面となる大きな平面を生成する。
+ */
 function buildGround() {
-  const mat = new THREE.MeshLambertMaterial({ color: 0x0c0810 });
+  const mat = new THREE.MeshLambertMaterial({ color: 0x0c0810 }); // 暗い紫
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(400, 200), mat);
-  mesh.rotation.x = -Math.PI / 2;
+  mesh.rotation.x = -Math.PI / 2; // 水平に寝かせる（デフォルトは垂直）
   mesh.position.y = 0;
   scene.add(mesh);
 }
 
-/* ── FBX 城モデル読み込み ──────────────────────────────────────── */
+/* ── FBX 城モデル読み込みユーティリティ ───────────────────────── */
+/**
+ * FBX ファイルを Promise でラップして非同期に読み込む。
+ * 読み込み失敗時は null を返す（アプリがクラッシュしないようにする）。
+ * @param {string} url - FBX ファイルの URL
+ * @returns {Promise<THREE.Group|null>}
+ */
 function loadFbx(url) {
   return new Promise(resolve => {
+    // FBXLoader: Three.js の拡張ローダー。FBX 形式を Group（3D オブジェクト）に変換する。
+    // 引数: (url, onLoad, onProgress, onError)
     new FBXLoader().load(url, resolve, undefined, () => resolve(null));
   });
 }
 
+/**
+ * グループ内の全メッシュに同じマテリアルを一括適用する。
+ * group.traverse() はグループ内の全オブジェクトを再帰的に訪問する。
+ * @param {THREE.Group}   group - FBX 読み込み結果のグループ
+ * @param {THREE.Material} mat  - 適用するマテリアル
+ */
 function applyMat(group, mat) {
   group.traverse(o => {
-    if (o.isMesh) {
+    if (o.isMesh) {          // メッシュ（面を持つ 3D オブジェクト）のみ処理
       o.material = mat;
-      o.castShadow = false;
+      o.castShadow    = false; // 影の計算を省略（軽量化）
       o.receiveShadow = false;
     }
   });
 }
 
-/** FBX を原点中心・地面ゼロに揃える */
+/**
+ * FBX を原点中心・地面ゼロに揃える。
+ * Box3（バウンディングボックス）を使ってモデルの中心を計算し、
+ * 地面（y=0）にぴったり設置する。
+ * @param {THREE.Group} raw - FBX 読み込み結果のグループ
+ */
 function centerOnGround(raw) {
-  raw.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(raw);
-  const c   = box.getCenter(new THREE.Vector3());
-  raw.position.set(-c.x, -box.min.y, -c.z);
+  raw.updateMatrixWorld(true); // 子の行列を更新してから Box3 を計算
+  const box = new THREE.Box3().setFromObject(raw); // バウンディングボックスを計算
+  const c   = box.getCenter(new THREE.Vector3());  // 中心点を取得
+  raw.position.set(-c.x, -box.min.y, -c.z);        // 中心を原点、底辺を y=0 に移動
 }
 
 /**
- * バウンディングボックスの中心から離れすぎたメッシュを除去する
- * ratio: 短辺の何倍以内なら残すか（0〜1）
+ * バウンディングボックスの中心から離れすぎたメッシュを除去する。
+ * FBX に含まれる浮いたパーツ（遠方の木・小物など）を削除して
+ * パフォーマンスを改善するためのユーティリティ。
+ * ※ 現在は buildFBXCity() でコメントアウトされているため呼ばれない。
+ * @param {THREE.Group} raw   - FBX グループ
+ * @param {number}      ratio - 中心から「短辺×ratio」以内のメッシュだけ残す
  */
 function trimOutliers(raw, ratio) {
   raw.updateMatrixWorld(true);
@@ -163,52 +264,65 @@ function trimOutliers(raw, ratio) {
     const dx = wp.x - cen.x, dz = wp.z - cen.z;
     if (Math.sqrt(dx * dx + dz * dz) > r) doomed.push(o);
   });
-  doomed.forEach(o => o.removeFromParent());
+  doomed.forEach(o => o.removeFromParent()); // 配列に溜めてから削除（traverse 中の変更は危険）
 }
 
+/* ── FBX 城モデル ─────────────────────────────────────────────── */
+/**
+ * FBX 城モデルを読み込み、メッシュ名に応じて 3 種のマテリアルを割り当てる。
+ * - 'tower' を含む名前 → Dark Bricks テクスチャ（塔）
+ * - 'wall'  を含む名前 → Brown Bricks テクスチャ（壁）
+ * - それ以外            → Old Bricks テクスチャ（構造物）
+ */
 function buildFBXCity() {
   // バリエーション混在: 塔=Dark、壁=Brown、構造=Old → 石造りの色彩が豊か
   const matTower  = makeMat('Castle_Towers_',     VARIATIONS.dark);
   const matWall   = makeMat('Castle_Walls_',      VARIATIONS.brown);
   const matStruct = makeMat('Castle_Structures_', VARIATIONS.old);
 
-  // RenderCrate-Castles.fbx = 組み立て済み城シーン
+  // RenderCrate-Castles.fbx = 組み立て済み城シーン（最も大きい FBX ファイル）
   loadFbx('/3Dobject_data/castle/RenderCrate-Castles.fbx').then(raw => {
-    if (!raw) { addFallbackCenter(); return; }
+    if (!raw) { addFallbackCenter(); return; } // 読み込み失敗時はフォールバック
 
-    raw.scale.setScalar(0.013);
-    raw.updateMatrixWorld(true);
+    raw.scale.setScalar(0.013); // FBX は大きすぎるため縮小（0.013 = 1.3%）
+    raw.updateMatrixWorld(true); // スケール変更後に行列を更新
 
     // メッシュ名 / マテリアル名でテクスチャを自動選択
     raw.traverse(o => {
       if (!o.isMesh) return;
+      // マテリアルが配列の場合（複数テクスチャメッシュ）は名前を結合
       const matName = Array.isArray(o.material)
         ? o.material.map(m => m.name).join(' ')
         : (o.material?.name || '');
       const n = (matName + ' ' + o.name).toLowerCase();
-      o.material = n.includes('tower') ? matTower
-                 : n.includes('wall')  ? matWall
-                 : matStruct;
-      o.castShadow    = false;
+      o.material = n.includes('tower') ? matTower  // 塔
+                 : n.includes('wall')  ? matWall   // 壁
+                 : matStruct;                       // その他（構造物）
+      o.castShadow    = false; // 影は無効（パフォーマンス優先）
       o.receiveShadow = false;
     });
 
-    // 外れ値部品を除去（コメントアウト中：デバッグ時は有効化）
+    // 外れ値部品を除去（現在はコメントアウト中：デバッグ時に有効化して使う）
     // trimOutliers(raw, 0.45);
     raw.updateMatrixWorld(true);
-    centerOnGround(raw);
+    centerOnGround(raw); // 地面ゼロ・原点中心に揃える
 
     const grp = new THREE.Group();
     grp.add(raw);
-    // 横並び城群をそのまま正面パノラマとして配置
+    // 横並び城群をそのまま正面パノラマとして配置（少し左・奥に移動）
     grp.position.set(-20, 0, -28);
     scene.add(grp);
     console.log('[Town] Castles.fbx loaded');
   });
 }
 
+/**
+ * FBX 読み込み失敗時に表示する簡易プロシージャル城シルエット。
+ * BoxGeometry を積み重ねて城塔らしく見せる。
+ */
 function addFallbackCenter() {
-  const mat = new THREE.MeshLambertMaterial({ color: 0x5a4880 });
+  const mat = new THREE.MeshLambertMaterial({ color: 0x5a4880 }); // 紫がかった石色
+  // [x, 高さ, 幅] の配列で簡易的な塔を生成
   [[0, 28, 10], [-15, 40, 6], [15, 40, 6], [0, 50, 4]].forEach(([x, h, w]) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w * 3, h, w * 3), mat);
     m.position.set(x, h / 2, -58);
