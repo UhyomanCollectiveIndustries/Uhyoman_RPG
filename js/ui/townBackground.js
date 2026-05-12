@@ -331,30 +331,42 @@ function addFallbackCenter() {
 }
 
 /* ── 松明 & PointLight ─────────────────────────────────────────── */
+/**
+ * 5 本の松明を生成する。各松明は 3 つのオブジェクトで構成される：
+ *   1. PointLight（点光源）  → 炎の明かりを周囲に広げる
+ *   2. CylinderGeometry（柄）→ 木の棒
+ *   3. SphereGeometry（炎コア）→ 燃えている部分
+ *   4. SphereGeometry（ハロー）→ 炎のグロー効果（半透明・加算合成）
+ * 点光源は torchLights 配列に保存し、animate() でフリッカー（揺らぎ）を与える。
+ */
 function buildTorches() {
   for (const x of TORCH_X) {
+    // PointLight：指定範囲内を照らす点光源（ろうそく・松明に適した）
+    // 引数：(色, 強度, 減衰距離)
     const light = new THREE.PointLight(0xff9040, 60.0, 120);
     light.position.set(x, 3.5, TORCH_Z);
     scene.add(light);
-    torchLights.push({ light, baseInt: 60.0 });
+    torchLights.push({ light, baseInt: 60.0 }); // baseInt = フリッカー計算の基準強度
 
-    // 柄 (Cylinder)
+    // 柄（細い円柱）
     const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.13, 0.9, 6),
-      new THREE.MeshLambertMaterial({ color: 0x3a1e08 })
+      new THREE.CylinderGeometry(0.07, 0.13, 0.9, 6), // 上細・下太の 6 角柱
+      new THREE.MeshLambertMaterial({ color: 0x3a1e08 }) // こげ茶
     );
     pole.position.set(x, 2.7, TORCH_Z);
     scene.add(pole);
 
-    // 炎コア（球）
+    // 炎コア（小さな球体 → 燃えている中心）
     const flame = new THREE.Mesh(
       new THREE.SphereGeometry(0.20, 8, 8),
-      new THREE.MeshBasicMaterial({ color: 0xff9930 })
+      new THREE.MeshBasicMaterial({ color: 0xff9930 }) // 橙色（ライティング無視）
     );
     flame.position.set(x, 3.4, TORCH_Z);
     scene.add(flame);
 
     // 炎ハロー（大きめ・半透明・加算合成）
+    // AdditiveBlending：後ろの色に足し算で重ねる → グロー（発光）効果
+    // depthWrite: false → 奥行きバッファに書き込まない（他のオブジェクトを隠さない）
     const halo = new THREE.Mesh(
       new THREE.SphereGeometry(0.45, 8, 8),
       new THREE.MeshBasicMaterial({
@@ -368,13 +380,19 @@ function buildTorches() {
 }
 
 /* ── 火の粉パーティクル ────────────────────────────────────────── */
+/**
+ * 松明から立ち昇る火の粉パーティクルシステムを生成する。
+ * 120 個の粒を 5 本の松明の近くに分散配置し、animate() で
+ * 毎フレーム上昇・左右ドリフトさせてループする。
+ */
 function buildEmbers() {
   const count = 120;
-  const pos   = new Float32Array(count * 3);
+  // Float32Array で粒の初期位置を設定
+  const pos = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
-    const tx = TORCH_X[i % TORCH_X.length];
-    pos[i * 3]     = tx + (Math.random() - 0.5) * 4;
-    pos[i * 3 + 1] = 3 + Math.random() * 10;
+    const tx = TORCH_X[i % TORCH_X.length]; // 松明を順番に割り当て
+    pos[i * 3]     = tx + (Math.random() - 0.5) * 4; // 松明付近にランダム散布
+    pos[i * 3 + 1] = 3 + Math.random() * 10;          // 高さ 3〜13
     pos[i * 3 + 2] = TORCH_Z + (Math.random() - 0.5) * 2;
   }
   const geo = new THREE.BufferGeometry();
@@ -386,26 +404,41 @@ function buildEmbers() {
   });
   const pts = new THREE.Points(geo, mat);
   scene.add(pts);
+  // emberSystems に保存 → animate() で位置を毎フレーム更新する
   emberSystems.push({ pts, pos, count });
 }
 
 /* ── リサイズ ────────────────────────────────────────────────── */
+/**
+ * ウィンドウサイズ変更時にカメラとレンダラーを更新する。
+ * カメラの aspect（アスペクト比）を更新しないと映像が歪む。
+ */
 function onResize() {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+  camera.updateProjectionMatrix(); // aspect 変更後に必ず呼ぶ
   renderer.setSize(w, h);
 }
 
 /* ── アニメーションループ ────────────────────────────────────── */
+/**
+ * 毎フレーム呼ばれるアニメーション更新関数。
+ * requestAnimationFrame で自分自身を再帰的に呼んでループする。
+ * 処理内容：
+ *   1. 松明フリッカー   : sin 波を重ねて自然な炎の揺らぎを表現
+ *   2. 火の粉上昇      : Y 座標を毎フレーム増やし、上限超えたらリセット
+ *   3. カメラドリフト   : sin 関数で超低速な水平・垂直の揺れ
+ */
 function animate() {
-  animId = requestAnimationFrame(animate);
-  const t = clock.getElapsedTime();
+  animId = requestAnimationFrame(animate); // 次フレームに自分を登録
+  const t = clock.getElapsedTime();        // 経過秒数（起動からの合計）
 
-  // 松明フリッカー
+  // 松明フリッカー：2 つの sin 波を合成して不規則な炎の揺らぎを作る
+  // sin(t * 8.3) → 速い揺れ（0.7 倍で振幅を抑える）
+  // sin(t * 15.1) → より速い揺れ（0.3 倍で弱く）
   for (const { light, baseInt } of torchLights) {
     light.intensity = baseInt
-      + Math.sin(t * 8.3 + light.position.x) * 0.7
+      + Math.sin(t * 8.3  + light.position.x) * 0.7
       + Math.sin(t * 15.1 + light.position.x * 0.5) * 0.3;
   }
 
@@ -413,8 +446,10 @@ function animate() {
   for (const em of emberSystems) {
     const p = em.pts.geometry.attributes.position.array;
     for (let i = 0; i < em.count; i++) {
-      p[i * 3 + 1] += 0.014;
-      p[i * 3]     += Math.sin(t * 0.9 + i * 1.3) * 0.004;
+      p[i * 3 + 1] += 0.014; // Y（高さ）を毎フレーム増やす
+      // X（横）を sin で左右にランダムドリフト
+      p[i * 3] += Math.sin(t * 0.9 + i * 1.3) * 0.004;
+      // 高さ 18 を超えたら松明の根元にリセット（ループ）
       if (p[i * 3 + 1] > 18) {
         const tx = TORCH_X[i % TORCH_X.length];
         p[i * 3]     = tx + (Math.random() - 0.5) * 3;
@@ -422,23 +457,35 @@ function animate() {
         p[i * 3 + 2] = -5 + (Math.random() - 0.5) * 2;
       }
     }
+    // needsUpdate = true：GPU バッファを再アップロードする（必須）
     em.pts.geometry.attributes.position.needsUpdate = true;
   }
 
-  // カメラ超低速ドリフト（遠近感のある揺れ）
+  // カメラ超低速ドリフト（映画的な揺れ）
+  // sin(t * 0.025) → 約 40 秒周期でゆっくり左右に動く
   camera.position.x = Math.sin(t * 0.025) * 3.0;
-  camera.position.y = 10 + Math.sin(t * 0.018) * 0.5;
-  camera.lookAt(Math.sin(t * 0.015) * 4, 5, -40);
+  camera.position.y = 10 + Math.sin(t * 0.018) * 0.5; // わずかに上下
+  camera.lookAt(Math.sin(t * 0.015) * 4, 5, -40);      // 注視点も少し左右に動く
 
-  renderer.render(scene, camera);
+  renderer.render(scene, camera); // シーンをキャンバスに描画
 }
 
+/* ── start / stop ──────────────────────────────────────────────── */
+/**
+ * アニメーションループを開始する。
+ * initTownBackground() の戻り値 { start, stop } を通じて呼ばれる。
+ */
 export function start() {
-  clock.start();
-  animate();
+  clock.start(); // 経過時間の計測を開始（フリッカー・ドリフト計算に使う）
+  animate();     // ループを開始
 }
 
+/**
+ * アニメーションループを停止する。
+ * 画面を離れたとき（showScreen で別画面に切り替えたとき）に呼ぶ。
+ * cancelAnimationFrame で次フレームへの登録をキャンセルする。
+ */
 export function stop() {
-  cancelAnimationFrame(animId);
-  clock.stop();
+  cancelAnimationFrame(animId); // ループを止める
+  clock.stop();                 // 時計も止める
 }
